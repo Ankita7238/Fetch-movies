@@ -13,18 +13,17 @@ function App() {
     setIsLoading(true);
     setError('');
     try {
-      const response = await fetch('https://swapi.dev/api/films/');
+      const response = await fetch('https://fetch-movies-7525c-default-rtdb.firebaseio.com/movies.json');
       if (!response.ok) {
         throw new Error('Network response was not ok');
       }
       const result = await response.json();
-      const transformedData = result.results.map((ele) => ({
-        id: ele.episode_id,
-        title: ele.title,
-        opening_text: ele.opening_crawl,
-        releaseDate: ele.release_date,
+      // Convert Firebase response object to array
+      const transformedData = Object.keys(result).map((key) => ({
+        id: key,
+        ...result[key],
       }));
-
+      
       setData(transformedData);
 
       if (transformedData.length === 0) {
@@ -67,11 +66,57 @@ function App() {
     setNewMovie((prev) => ({ ...prev, [name]: value }));
   }, []);
 
-  const addMovie = useCallback((e) => {
+  const addMovie = useCallback(async (e) => {
     e.preventDefault();
-    console.log(newMovie);
-    setNewMovie({ title: '', openingText: '', releaseDate: '' });
-  }, [newMovie]);
+    try {
+      setIsLoading(true);
+      setError('');
+
+      const response = await fetch('https://fetch-movies-7525c-default-rtdb.firebaseio.com/movies.json', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newMovie),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to add movie');
+      }
+
+      // Refresh the movie list after adding
+      fetchData();
+      setNewMovie({ title: '', openingText: '', releaseDate: '' });
+
+      console.log('New movie added:', newMovie);
+    } catch (error) {
+      setError('Failed to add movie');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [newMovie, fetchData]);
+
+  const deleteMovie = useCallback(async (id) => {
+    setIsLoading(true);
+    setError('');
+    try {
+      const response = await fetch(`https://fetch-movies-7525c-default-rtdb.firebaseio.com/movies/${id}.json`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete movie');
+      }
+
+      // Remove the deleted movie from the state
+      setData((prevData) => prevData.filter((movie) => movie.id !== id));
+      console.log(`Movie with ID ${id} deleted successfully`);
+    } catch (error) {
+      setError('Failed to delete movie');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   const formatText = (text) => {
     return { __html: text.replace(/(?:\r\n|\r|\n)/g, '<br />') };
@@ -113,7 +158,9 @@ function App() {
             <div key={movie.id}>
               <h4>{movie.title}</h4>
               <p>{movie.releaseDate}</p>
-              <p dangerouslySetInnerHTML={formatText(movie.opening_text)} />
+              <p dangerouslySetInnerHTML={formatText(movie.openingText)} />
+
+              <button className="button" onClick={() => deleteMovie(movie.id)}>Delete Movie</button>
             </div>
           ))}
         </div>
